@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Australian Court Chronicle</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet" />
+  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Roboto:wght@300;400;500&display=swap');
+    body{font-family:'Roboto',sans-serif}
+    .headline-font{font-family:'Playfair Display',serif}
+    .nav-link:hover{text-decoration:underline;text-underline-offset:8px;text-decoration-thickness:2px}
+    .news-card:hover .news-title{text-decoration:underline}
+    .news-card{transition:transform .2s ease, box-shadow .2s ease}
+    .news-card:hover{transform:translateY(-4px);box-shadow:0 10px 25px -10px rgba(0,0,0,.2)}
+    .hero-gradient{background:linear-gradient(180deg,rgba(0,0,0,.7) 0%,rgba(0,0,0,.35) 100%)}
+    .section{display:none}
+    .section.active{display:block}
+    .article-content span{margin-right:.4em;display:inline-block}
+    .article-content p{margin-bottom:1rem;line-height:1.6}
+    .article-content p:last-child{margin-bottom:0}
+    .article-content p,.article-content ul,.article-content ol,.article-content blockquote{margin-bottom:1rem}
+    .aspect-video{position:relative;padding-top:56.25%}
+    .aspect-video>iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+    .breaking{animation:pulse 2s infinite}
+    @keyframes pulse{0%{background:#dc2626}50%{background:#b91c1c}100%{background:#dc2626}}
+  </style>
+</head>
+<body class="bg-gray-50">
+
+  <!-- Breaking strip -->
+  <div class="breaking py-2 px-4 text-white text-center font-medium hidden md:block">
+    <div class="container mx-auto flex items-center justify-center">
+      <span class="mr-2 font-bold">BREAKING:</span>
+      <span class="truncate">Live: major judgment handed down. Full coverage and analysis inside.</span>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="border-b border-gray-200 bg-white sticky top-0 z-50">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex items-center justify-between">
+        <a href="#home" data-section="home" class="headline-font text-2xl md:text-3xl font-bold text-gray-900">The Australian Court Chronicle</a>
+        <div class="flex items-center gap-3">
+          <button class="hidden md:inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Subscribe</button>
+          <button id="open-menu" class="md:hidden p-2" aria-label="Open menu"><i data-feather="menu"></i></button>
+        </div>
+      </div>
+      <nav id="top-nav" class="hidden md:flex gap-6 mt-3 text-sm md:text-base"></nav>
+    </div>
+  </header>
+  <!-- Full width category banner -->
+  <div id="category-banner" class="hidden bg-blue-900 text-white py-4">
+    <div class="container mx-auto px-4">
+      <h1 id="category-banner-title" class="headline-font text-2xl md:text-3xl font-bold"></h1>
+      <p id="category-banner-subtitle" class="opacity-90"></p>
+    </div>
+  </div>
+
+
+
+  <!-- Mobile menu -->
+  <aside id="mobile-menu" class="md:hidden fixed inset-0 bg-black/40 hidden">
+    <div class="absolute right-0 top-0 bottom-0 w-64 bg-white shadow-lg p-4">
+      <div class="flex items-center justify-between mb-4">
+        <span class="font-bold">Menu</span>
+        <button id="close-menu" class="p-2" aria-label="Close menu"><i data-feather="x"></i></button>
+      </div>
+      <nav id="mobile-nav" class="flex flex-col space-y-2"></nav>
+    </div>
+  </aside>
+
+  <!-- Main root -->
+  <main id="root" class="container mx-auto px-4 my-8"></main>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-white mt-16">
+    <div class="container mx-auto px-4 py-12">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div>
+          <h3 class="headline-font text-xl font-bold mb-4">The Australian Court Chronicle</h3>
+          <p class="text-gray-400 text-sm">Independent coverage of courts and the law.</p>
+        </div>
+        <div>
+          <h4 class="font-bold mb-4">Sections</h4>
+          <ul id="footer-nav" class="space-y-2 text-gray-300"></ul>
+        </div>
+        <div>
+          <h4 class="font-bold mb-4">Company</h4>
+          <ul class="space-y-2 text-gray-300">
+            <li><a href="#" class="hover:text-white">About</a></li>
+            <li><a href="#" class="hover:text-white">Contact</a></li>
+            <li><a href="#" class="hover:text-white">Ethics</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="font-bold mb-4">Newsletter</h4>
+          <p class="text-gray-300 text-sm mb-3">Daily legal brief in your inbox.</p>
+          <div class="flex gap-2">
+            <input type="email" placeholder="Your email" class="px-3 py-2 rounded bg-gray-800 border border-gray-700 text-sm w-full">
+            <button class="bg-blue-600 hover:bg-blue-700 px-4 rounded">Join</button>
+          </div>
+          <p class="text-gray-500 text-xs mt-2">We respect your privacy.</p>
+        </div>
+      </div>
+      <div class="border-t border-gray-800 mt-8 pt-6 text-gray-500 text-sm">© <span id="year"></span> Court Chronicle. All rights reserved.</div>
+    </div>
+  </footer>
+
+<script>
+(function(){
+  "use strict";
+  const API = "https://wp.thenewdaily.com.au/wp-json/wp/v2/posts"; // reuse working WP API
+
+  // Sections tailored to legal topics, using search-based feeds so you do not need specific category IDs
+  const CATS = [
+    { key: "home", label: "Home", type: "home" },
+    { key: "highcourt", label: "High Court", type: "category", search: "Aus AND High Court" , tagline: "Latest from the High Court of Australia" },
+    { key: "federal", label: "Federal Court", type: "category", search: "Aus AND Federal AND Court" , tagline: "Decisions and filings across the Federal Court" },
+    { key: "state", label: "State Courts", type: "category", search: "Australia AND Supreme AND Court OR District" , tagline: "Key rulings across the states and territories" },
+    { key: "tribunals", label: "Tribunals", type: "category", search: "Australia AND court OR Tribunal" , tagline: "Significant tribunal decisions and trends" },
+    { key: "analysis", label: "Legal Analysis", type: "category", search: "Aus AND law" , tagline: "Explainers and expert commentary" },
+    { key: "judges", label: "Judges", type: "category", search: "Australia AND judge OR justice AND appointment OR retirement" , tagline: "Appointments, retirements and profiles" },
+    { key: "reform", label: "Law Reform", type: "category", search: "Cyber AND crime" , tagline: "Bills, inquiries and reforms" },
+  ];
+
+  // State
+  const loaded = Object.fromEntries(CATS.map(c => [c.key, false]));
+  const inflight = Object.fromEntries(CATS.map(c => [c.key, false]));
+  const seen = Object.fromEntries(CATS.map(c => [c.key, new Set()]));
+  const cache = new Map();
+  let prefetchStarted = false;
+
+  // Utils
+  const qs = (sel, el=document) => el.querySelector(sel);
+  const qsa = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+  const fmtDate = (iso) => new Date(iso).toLocaleDateString();
+  const setYear = () => { const y = document.getElementById("year"); if (y) y.textContent = new Date().getFullYear(); };
+  const scrollToTop = () => { try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { window.scrollTo(0,0); } };
+
+  function imgFrom(post){
+    const yo = post?.yoast_head_json?.og_image?.[0]?.url; if (yo) return yo;
+    return post?._embedded?.["wp:featuredmedia"]?.[0]?.source_url || "";
+  }
+  function storePost(p){ cache.set(p.id, p); try { localStorage.setItem("article-"+p.id, JSON.stringify(p)); } catch{} }
+  function getPost(id){ if (cache.has(id)) return cache.get(id); try { const s = localStorage.getItem("article-"+id); if (s){ const p = JSON.parse(s); cache.set(id,p); return p; } } catch{} return null; }
+
+  // Transform shortcodes like [jwplayer=XXXXX]
+  function transformEmbeds(html, data){
+    if (!html) return "";
+    return html.replace(/\[jwplayer\s*=\s*([^\]\s]+)\]/gi, (m,id) => {
+      // Show a graceful placeholder by default
+      return `<div class="my-4 p-3 bg-gray-100 text-center rounded text-gray-700">Video unavailable (<code>${id}</code>)</div>`;
+    });
+  }
+
+  // Templates
+  const tpl = {
+    navLink: (c) => `<a href="#${c.key}" data-section="${c.key}" class="nav-link">${c.label}</a>`,
+    footerLink: (c) => `<li><a href="#${c.key}" data-section="${c.key}" class="hover:text-white">${c.label}</a></li>`,
+    hero: (post,prefix) => `
+<section class="mb-12" data-aos="fade-up">
+            <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                <div class="md:flex">
+                    <div class="md:w-2/3">
+                        <img src="${imgFrom(post)}" alt="${post.title.rendered}">
+                    </div>
+                    <div class="p-6 md:w-1/3">
+                        <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">FEATURED</span>
+                        <h1 id="${prefix}-title" class="headline-font text-3xl md:text-4xl font-bold mt-2 mb-4">${post.title.rendered}</h1>
+                        <p id="${prefix}-excerpt" class="text-gray-600 mb-4">${post?.yoast_head_json?.description || ""}</p>
+                        <div class="flex items-center text-sm text-gray-500">
+                            <span>By Elizabeth Thompson</span>
+                            <span class="mx-2">•</span>
+                            <span>3 hours ago</span>
+                        </div>
+
+                        
+                        <button  href="#story-${post.id}" id="${prefix}-link" data-story-id="${post.id}" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-medium">Read Full Story</button>
+                    </div>
+                </div>
+            </div>
+        </section>`,
+    featured: (post, prefix) => `         
+        <section class="mb-12" data-aos="fade-up">
+            <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                <div class="md:flex">
+                    <div class="md:w-2/3">
+                        <img src="${imgFrom(post)}" alt="${post.title.rendered}">
+                    </div>
+                    <div class="p-6 md:w-1/3">
+                        <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">FEATURED</span>
+                        <h1 id="${prefix}-title" class="headline-font text-3xl md:text-4xl font-bold mt-2 mb-4">${post.title.rendered}</h1>
+                        <p id="${prefix}-excerpt" class="text-gray-600 mb-4">${post?.yoast_head_json?.description || ""}</p>
+                        <div class="flex items-center text-sm text-gray-500">
+                            <span>By Elizabeth Thompson</span>
+                            <span class="mx-2">•</span>
+                            <span>3 hours ago</span>
+                        </div>
+
+                        
+                        <button  href="#story-${post.id}" id="${prefix}-link" data-story-id="${post.id}" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-medium">Read Full Story</button>
+                    </div>
+                </div>
+            </div>
+        </section>`,
+    gridWrap: (title, feedId) => `
+      <section class="mb-12">
+        <h2 class="headline-font text-2xl font-bold mb-6 border-b border-gray-200 pb-2">${title}</h2>
+        <div id="${feedId}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+      </section>`,
+    card: (post) => `
+      <div class="bg-white rounded-lg overflow-hidden shadow-sm news-card">
+        <a href="#story-${post.id}" data-story-id="${post.id}">
+          <img src="${imgFrom(post)}" alt="" loading="lazy" class="w-full h-48 object-cover" onerror="this.style.display='none'">
+          <div class="p-4">
+            <span class="text-xs text-gray-500">${post?.yoast_head_json?.author || "Unknown"} • ${fmtDate(post.date)}</span>
+            <h3 class="news-title headline-font font-bold text-lg my-2">${post.title.rendered}</h3>
+            <p class="text-gray-600 text-sm">${post?.yoast_head_json?.description || ""}</p>
+          </div>
+        </a>
+      </div>` ,
+    storyShell: () => `
+      <div id="story" class="section">
+        <main class="container mx-auto px-4 my-8">
+          <article class="max-w-4xl mx-auto">
+            <header class="mb-8">
+              <div class="mb-4 text-sm text-gray-500"><span id="article-date"></span></div>
+              <h1 class="headline-font text-3xl md:text-4xl font-bold mb-4" id="article-title"></h1>
+              <p class="text-xl text-gray-600 mb-6" id="article-excerpt"></p>
+              <div class="flex items-center" id="article-author-box" style="display:none;">
+                <div class="w-10 h-10 rounded-full bg-gray-300 mr-3 overflow-hidden">
+                  <img id="article-author-img" src="https://thispersondoesnotexist.com" alt="Author" class="w-full h-full object-cover" />
+                </div>
+                <div>
+                  <p class="font-medium">By <span id="article-author"></span></p>
+                  <p class="text-sm text-gray-500">Court Chronicle Correspondent</p>
+                </div>
+              </div>
+            </header>
+            <div class="mb-8" id="article-image-box" style="display:none;">
+              <img id="article-image" alt="" class="w-full h-auto rounded-lg" />
+            </div>
+            <div class="article-content text-gray-800 mb-12" id="article-content"></div>
+            <button data-section="home" class="mt-6 text-blue-700 font-medium">← Back</button>
+          </article>
+        </main>
+      </div>`
+  };
+
+  // Hash parser for deep links like #story-123
+  function parseHash(){
+    const raw = (location.hash||"").replace('#','');
+    const m = raw.match(/^story[-=](\d+)$/);
+    return m ? { type:'story', id:m[1] } : { type: raw || 'home' };
+  }
+
+  // Shells
+  function mountShells(){
+    const root = qs('#root');
+    root.innerHTML = '';
+
+    // Home shell
+    const homeEl = document.createElement('div');
+    homeEl.id = 'home';
+    homeEl.className = 'section active';
+    homeEl.innerHTML = `
+      <section id="home-hero-slot" class="mb-8"></section>
+      ${tpl.gridWrap('Latest legal stories', 'home-feed')}
+    `;
+    root.appendChild(homeEl);
+
+    // Category shells
+    for (const c of CATS.filter(x => x.type==='category')){
+      const div = document.createElement('div');
+      div.id = c.key; div.className = 'section';
+      div.innerHTML = `
+        <section class="mb-12"><div id="${c.key}-featured-slot"></div></section>
+        ${tpl.gridWrap('Latest', c.key+'-feed')}
+      `;
+      root.appendChild(div);
+    }
+
+    // Story shell
+    const storyWrap = document.createElement('div');
+    storyWrap.innerHTML = tpl.storyShell();
+    root.appendChild(storyWrap.firstElementChild);
+  }
+
+  // Navs
+  function mountNavs(){
+    const links = CATS.map(tpl.navLink).join('');
+    qs('#top-nav').innerHTML = links;
+    qs('#mobile-nav').innerHTML = CATS.map(c=>`<a href="#${c.key}" data-section="${c.key}" class="p-2 rounded hover:bg-gray-100">${c.label}</a>`).join('');
+    qs('#footer-nav').innerHTML = CATS.map(tpl.footerLink).join('');
+  }
+
+  // Fetchers (search-based)
+  async function fetchPosts(query){
+    const url = new URL(API);
+    Object.entries(query).forEach(([k,v])=> url.searchParams.set(k,v));
+    try{ const res = await fetch(url.toString()); if(!res.ok) throw new Error('Bad response'); const data = await res.json(); return Array.isArray(data)?data:[]; } catch{ return []; }
+  }
+
+  // Get a list for a legal topic using WP search
+  async function loadBySearch(term){
+    // WP search is fuzzy; we also request _embed for media
+    return await fetchPosts({ per_page: 20, _embed: '', search: term });
+  }
+
+  async function loadHome(){
+    // Use a broad legal query for home
+    const data = await loadBySearch('court OR law OR legal');
+    if(!data.length) return;
+    data.forEach(storePost);
+    qs('#home-hero-slot').innerHTML = tpl.hero(data[0]);
+    pumpCards(qs('#home-feed'),'home', data.slice(1,20));
+  }
+
+  async function loadCategory(catKey){
+    const cfg = CATS.find(c=>c.key===catKey);
+    if(!cfg) return;
+    const data = await loadBySearch(cfg.search);
+    if(!data.length) return;
+    data.forEach(storePost);
+    const featured = data[0] || data[1];
+    if(featured) qs(`#${cfg.key}-featured-slot`).innerHTML = tpl.featured(featured, cfg.key);
+    pumpCards(qs(`#${cfg.key}-feed`), cfg.key, data.slice(1,20));
+  }
+
+  function pumpCards(container,key,posts){
+    let i=0; const s=seen[key];
+    function step(){
+      if(i>=posts.length) return;
+      const p=posts[i++];
+      if(!s.has(p.id)){ s.add(p.id); container.insertAdjacentHTML('beforeend', tpl.card(p)); }
+      if('requestIdleCallback' in window) requestIdleCallback(step); else setTimeout(step,60);
+    }
+    step();
+  }
+
+  // Full width banner control
+  function setBanner(sectionKey){
+    const banner = qs('#category-banner');
+    const titleEl = qs('#category-banner-title');
+    const subEl = qs('#category-banner-subtitle');
+    const cfg = CATS.find(c=>c.key===sectionKey);
+    const isCat = cfg && cfg.type==='category';
+    if(isCat){ titleEl.textContent = cfg.label; subEl.textContent = cfg.tagline || ''; banner.classList.remove('hidden'); }
+    else { banner.classList.add('hidden'); titleEl.textContent=''; subEl.textContent=''; }
+  }
+
+  // Router
+  function showSection(id){
+    qsa('.section').forEach(s=>s.classList.remove('active'));
+    const target = qs('#'+(id||'home')) || qs('#home');
+    target.classList.add('active');
+    setBanner(id);
+    if(!loaded[id] && !inflight[id]){
+      inflight[id]=true; loaded[id]=true;
+      if(id==='home') loadHome().finally(()=>inflight[id]=false);
+      else if(CATS.find(c=>c.key===id && c.type==='category')) loadCategory(id).finally(()=>inflight[id]=false);
+      else inflight[id]=false;
+    }
+  }
+
+  async function showStory(id){
+    let data = getPost(id);
+    if(!data){ try{ const res = await fetch(`${API}/${id}?_embed`); if(res.ok){ data = await res.json(); storePost(data); } } catch{}
+    }
+    const setText = (sel,val)=>{ const el=qs(sel); if(el) el.textContent = val||''; };
+    const setHTML = (sel,val)=>{ const el=qs(sel); if(el) el.innerHTML = val||''; };
+    if(!data){ setText('#article-title','Article not found'); setHTML('#article-content','<p class="text-center text-gray-500">Sorry, we could not load this story.</p>'); showSection('story'); scrollToTop(); return; }
+
+    setHTML('#article-title', data.title.rendered);
+    setText('#article-excerpt', data?.yoast_head_json?.description || '');
+    const raw = data?.content?.rendered || '';
+    setHTML('#article-content', transformEmbeds(raw, data));
+    setText('#article-date', fmtDate(data.date));
+
+    const author = data?.yoast_head_json?.author; const box = qs('#article-author-box');
+    if(author){ qs('#article-author').textContent = author; box.style.display='flex'; } else { box.style.display='none'; }
+
+    const img = imgFrom(data); const imgBox = qs('#article-image-box');
+    if(img){ const el = qs('#article-image'); el.src = img; el.alt = data.title.rendered; imgBox.style.display='block'; } else { imgBox.style.display='none'; }
+
+    setBanner('');
+    if(location.hash!==`#story-${id}`) location.hash = `#story-${id}`;
+    qsa('.section').forEach(s=>s.classList.remove('active'));
+    qs('#story').classList.add('active');
+    scrollToTop();
+  }
+
+  // Prefetch once
+  function prefetchAll(){
+    if(prefetchStarted) return; prefetchStarted=true;
+    const run=()=>{
+      if(!loaded.home && !inflight.home){ inflight.home=true; loaded.home=true; loadHome().finally(()=>inflight.home=false); }
+      for(const c of CATS.filter(x=>x.type==='category')){
+        if(!loaded[c.key] && !inflight[c.key]){ inflight[c.key]=true; loaded[c.key]=true; loadCategory(c.key).finally(()=>inflight[c.key]=false); }
+      }
+    };
+    if('requestIdleCallback' in window) requestIdleCallback(run); else setTimeout(run,250);
+  }
+
+  // Events
+  document.addEventListener('click', (e)=>{
+    const sec = e.target.closest('[data-section]');
+    if(sec){ e.preventDefault(); const id=sec.getAttribute('data-section'); showSection(id); location.hash=id; scrollToTop(); closeMenu(); return; }
+    const story = e.target.closest('[data-story-id]');
+    if(story){ e.preventDefault(); const id = story.getAttribute('data-story-id'); if(id) showStory(id); closeMenu(); }
+  });
+
+  // Mobile menu
+  function openMenu(){ qs('#mobile-menu').classList.remove('hidden'); }
+  function closeMenu(){ qs('#mobile-menu').classList.add('hidden'); }
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const y = document.getElementById('year'); if(y) y.textContent = new Date().getFullYear();
+    if(window.AOS?.init) AOS.init();
+    if(window.feather?.replace) feather.replace();
+    mountShells();
+    mountNavs();
+    const h = parseHash();
+    if(h.type==='story') showStory(h.id); else showSection(h.type);
+    prefetchAll();
+  });
+  document.getElementById('open-menu').addEventListener('click', openMenu);
+  document.getElementById('close-menu').addEventListener('click', closeMenu);
+  qs('#mobile-menu').addEventListener('click', (e)=>{ if(e.target.id==='mobile-menu') closeMenu(); });
+
+  // Back/forward
+  window.addEventListener('hashchange', ()=>{
+    const h = parseHash();
+    if(h.type==='story'){ showStory(h.id); return; }
+    showSection(h.type||'home');
+  });
+
+  // Expose
+  window.app = { showSection, showStory, prefetchAll };
+})();
+</script>
+</body>
+</html>
