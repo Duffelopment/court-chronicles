@@ -118,13 +118,15 @@
   // Sections tailored to legal topics, using search-based feeds so you do not need specific category IDs
   const CATS = [
     { key: "home", label: "Home", type: "home" },
-    { key: "highcourt", label: "High Court", type: "category", search: "Aus AND High Court" , tagline: "Latest from the High Court of Australia" },
+    { key: "highcourt", label: "High Court", type: "category", search: "Aus AND law AND High Court" , tagline: "Latest from the High Court of Australia" },
     { key: "federal", label: "Federal Court", type: "category", search: "Aus AND Federal AND Court" , tagline: "Decisions and filings across the Federal Court" },
-    { key: "state", label: "State Courts", type: "category", search: "Australia AND Supreme AND Court OR District" , tagline: "Key rulings across the states and territories" },
-    { key: "tribunals", label: "Tribunals", type: "category", search: "Australia AND court OR Tribunal" , tagline: "Significant tribunal decisions and trends" },
+    { key: "state", label: "NSW Courts", type: "category", search: "NSW AND Law AND Court" , tagline: "Key rulings across the states and territories" },
+    { key: "tribunals", label: "Tribunals", type: "category", search: "Aus AND court OR Tribunal OR appeal" , tagline: "Significant tribunal decisions and trends" },
     { key: "analysis", label: "Legal Analysis", type: "category", search: "Aus AND law" , tagline: "Explainers and expert commentary" },
-    { key: "judges", label: "Judges", type: "category", search: "Australia AND judge OR justice AND appointment OR retirement" , tagline: "Appointments, retirements and profiles" },
-    { key: "reform", label: "Law Reform", type: "category", search: "Cyber AND crime" , tagline: "Bills, inquiries and reforms" },
+    { key: "judges", label: "Judges", type: "category", search: "Aus AND judge OR justice" , tagline: "Appointments, retirements and profiles" },
+    { key: "Cyber", label: "Cyber Crime", type: "category", search: "cyber OR hacker OR breach AND law" , tagline: "Technology and Law" },
+    { key: "Tax", label: "Tax", type: "category", search: "aus AND tax AND ato" , tagline: "ATO and Tax law" },
+
   ];
 
   // State
@@ -308,7 +310,7 @@
   // Get a list for a legal topic using WP search
   async function loadBySearch(term){
     // WP search is fuzzy; we also request _embed for media
-    return await fetchPosts({ per_page: 20, _embed: '', search: term });
+    return await fetchPosts({ per_page: 10, _embed: '', search: term });
   }
 
   async function loadHome(){
@@ -317,7 +319,7 @@
     if(!data.length) return;
     data.forEach(storePost);
     qs('#home-hero-slot').innerHTML = tpl.hero(data[0]);
-    pumpCards(qs('#home-feed'),'home', data.slice(1,20));
+    pumpCards(qs('#home-feed'),'home', data.slice(1,10));
   }
 
   async function loadCategory(catKey){
@@ -328,7 +330,7 @@
     data.forEach(storePost);
     const featured = data[0] || data[1];
     if(featured) qs(`#${cfg.key}-featured-slot`).innerHTML = tpl.featured(featured, cfg.key);
-    pumpCards(qs(`#${cfg.key}-feed`), cfg.key, data.slice(1,20));
+    pumpCards(qs(`#${cfg.key}-feed`), cfg.key, data.slice(1,10));
   }
 
   function pumpCards(container,key,posts){
