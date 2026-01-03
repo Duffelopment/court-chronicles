@@ -146,136 +146,176 @@
 <script>
 (function(){
   "use strict";
-  const API = "https://wp.thenewdaily.com.au/wp-json/wp/v2/posts"; // reuse working WP API
 
-  // Sections tailored to legal topics, using search-based feeds so you do not need specific category IDs
+  const API = "https://wp.thenewdaily.com.au/wp-json/wp/v2/posts";
+
   const CATS = [
     { key: "home", label: "Home", type: "home" },
-    { key: "highcourt", label: "High Court", type: "category", search: "Aus AND law AND High Court" , tagline: "Latest from the High Court of Australia" },
-    { key: "federal", label: "Federal Court", type: "category", search: "Aus AND Federal AND Court" , tagline: "Decisions and filings across the Federal Court" },
-    { key: "state", label: "NSW Courts", type: "category", search: "NSW AND Law AND Court" , tagline: "Key rulings across the states and territories" },
-    { key: "tribunals", label: "Tribunals", type: "category", search: "Aus AND court OR Tribunal OR appeal" , tagline: "Significant tribunal decisions and trends" },
-    { key: "analysis", label: "Legal Analysis", type: "category", search: "Aus AND law" , tagline: "Explainers and expert commentary" },
-    { key: "judges", label: "Judges", type: "category", search: "Aus AND judge OR justice" , tagline: "Appointments, retirements and profiles" },
-    { key: "Cyber", label: "Cyber Crime", type: "category", search: "cyber OR hacker OR breach AND law" , tagline: "Technology and Law" },
-    { key: "Tax", label: "Tax", type: "category", search: "aus AND tax AND ato" , tagline: "ATO and Tax law" },
-
+    { key: "highcourt", label: "High Court", type: "category", search: "Aus AND law AND High Court", tagline: "Latest from the High Court of Australia" },
+    { key: "federal", label: "Federal Court", type: "category", search: "Aus AND Federal AND Court", tagline: "Decisions and filings across the Federal Court" },
+    { key: "state", label: "NSW Courts", type: "category", search: "NSW AND Law AND Court", tagline: "Key rulings across the states and territories" },
+    { key: "tribunals", label: "Tribunals", type: "category", search: "Aus AND court OR Tribunal OR appeal", tagline: "Significant tribunal decisions and trends" },
+    { key: "analysis", label: "Legal Analysis", type: "category", search: "Aus AND law", tagline: "Explainers and expert commentary" },
+    { key: "judges", label: "Judges", type: "category", search: "Aus AND judge OR justice", tagline: "Appointments, retirements and profiles" },
+    { key: "Cyber", label: "Cyber Crime", type: "category", search: "cyber OR hacker OR breach AND law", tagline: "Technology and Law" },
+    { key: "Tax", label: "Tax", type: "category", search: "aus AND tax AND ato", tagline: "ATO and Tax law" },
   ];
 
-  // State
-  const loaded = Object.fromEntries(CATS.map(c => [c.key, false]));
+  const maxstories = 13;
+
+  const loaded   = Object.fromEntries(CATS.map(c => [c.key, false]));
   const inflight = Object.fromEntries(CATS.map(c => [c.key, false]));
-  const seen = Object.fromEntries(CATS.map(c => [c.key, new Set()]));
-  const cache = new Map();
-  let prefetchStarted = false;
-  const seenAll = new Set();  // IDs shown anywhere on the site
+  const seen     = Object.fromEntries(CATS.map(c => [c.key, new Set()]));
+  const cache    = new Map();
+  const seenAll  = new Set();
 
-
-  // Utils
   const qs = (sel, el=document) => el.querySelector(sel);
   const qsa = (sel, el=document) => Array.from(el.querySelectorAll(sel));
   const fmtDate = (iso) => new Date(iso).toLocaleDateString();
-  const setYear = () => { const y = document.getElementById("year"); if (y) y.textContent = new Date().getFullYear(); };
-const scrollToTop = () => {
-  window.scrollTo(0, 0);
-};
+
+  const TTL_MS = 60 * 60 * 1000;
+  const LS = {
+    lastFetch: "cc:lastFetch",
+    feed: (key) => `cc:feed:${key}`,
+    post: (id) => `article-${id}`,
+  };
+
+  function now(){ return Date.now(); }
+  function isFresh(){
+    const t = Number(localStorage.getItem(LS.lastFetch) || "0");
+    return (now() - t) < TTL_MS;
+  }
+  function markFetchedNow(){
+    localStorage.setItem(LS.lastFetch, String(now()));
+  }
 
   function imgFrom(post){
-    const yo = post?.yoast_head_json?.og_image?.[0]?.url; if (yo) return yo;
+    const yo = post?.yoast_head_json?.og_image?.[0]?.url;
+    if (yo) return yo;
     return post?._embedded?.["wp:featuredmedia"]?.[0]?.source_url || "";
   }
-  function storePost(p){ cache.set(p.id, p); try { localStorage.setItem("article-"+p.id, JSON.stringify(p)); } catch{} }
-  function getPost(id){ if (cache.has(id)) return cache.get(id); try { const s = localStorage.getItem("article-"+id); if (s){ const p = JSON.parse(s); cache.set(id,p); return p; } } catch{} return null; }
 
-  // Transform shortcodes like [jwplayer=XXXXX]
-  function transformEmbeds(html, data){
+  function storePost(p){
+    if (!p || !p.id) return;
+    cache.set(p.id, p);
+    try { localStorage.setItem(LS.post(p.id), JSON.stringify(p)); } catch {}
+  }
+  function getPost(id){
+    if (!id) return null;
+    const n = Number(id);
+    if (cache.has(n)) return cache.get(n);
+    try {
+      const s = localStorage.getItem(LS.post(n));
+      if (s){
+        const p = JSON.parse(s);
+        cache.set(n, p);
+        return p;
+      }
+    } catch {}
+    return null;
+  }
+
+  function storeFeed(key, posts){
+    try {
+      const ids = posts.map(p => p.id);
+      localStorage.setItem(LS.feed(key), JSON.stringify(ids));
+    } catch {}
+  }
+  function loadFeedIds(key){
+    try {
+      const raw = localStorage.getItem(LS.feed(key));
+      if (!raw) return [];
+      const ids = JSON.parse(raw);
+      return Array.isArray(ids) ? ids : [];
+    } catch { return []; }
+  }
+
+  function transformEmbeds(html){
     if (!html) return "";
     return html.replace(/\[jwplayer\s*=\s*([^\]\s]+)\]/gi, (m,id) => {
-      // Show a graceful placeholder by default
       return `<div class="my-4 p-3 bg-gray-100 text-center rounded text-gray-700">Video unavailable (<code>${id}</code>)</div>`;
     });
   }
 
-  // Templates
   const tpl = {
     navLink: (c) => `<a href="#${c.key}" data-section="${c.key}" class="nav-link">${c.label}</a>`,
     footerLink: (c) => `<li><a href="#${c.key}" data-section="${c.key}" class="hover:text-white">${c.label}</a></li>`,
+
     hero: (post,prefix) => `
-<section class="mb-12" data-aos="fade-up">
-            <div class="bg-white rounded-lg shadow-md overflow-hidden">
-                <div class="md:flex">
-                    <div class="md:w-2/3">
-                        <img
-                          src="${imgFrom(post)}"
-                          alt="${post.title.rendered}"
-                          loading="eager"
-                          fetchpriority="high"
-                          decoding="async"
-                          class="w-full h-full object-cover"
-                        />
-
-                    </div>
-                    <div class="p-6 md:w-1/3">
-                        <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">FEATURED</span>
-                        <h1 id="${prefix}-title" class="headline-font text-3xl md:text-4xl font-bold mt-2 mb-4">${post.title.rendered}</h1>
-                        <p id="${prefix}-excerpt" class="text-gray-600 mb-4">${post?.yoast_head_json?.description || ""}</p>
-                        <div class="flex items-center text-sm text-gray-500">
-                            <span>By Elizabeth Thompson</span>
-                            <span class="mx-2">•</span>
-                            <span>3 hours ago</span>
-                        </div>
-
-                        
-                        <button  href="#story-${post.id}" id="${prefix}-link" data-story-id="${post.id}" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-medium">Read Full Story</button>
-                    </div>
-                </div>
+      <section class="mb-12" data-aos="fade-up">
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+          <div class="md:flex">
+            <div class="md:w-2/3">
+              <img
+                src="${imgFrom(post)}"
+                alt="${post.title.rendered}"
+                loading="eager"
+                fetchpriority="high"
+                decoding="async"
+                class="w-full h-full object-cover"
+              />
             </div>
-        </section>`,
-    featured: (post, prefix) => `         
-        <section class="mb-12" data-aos="fade-up">
-            <div class="bg-white rounded-lg shadow-md overflow-hidden">
-                <div class="md:flex">
-                    <div class="md:w-2/3">
-                        <img src="${imgFrom(post)}" alt="${post.title.rendered}">
-                    </div>
-                    <div class="p-6 md:w-1/3">
-                        <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">FEATURED</span>
-                        <h1 id="${prefix}-title" class="headline-font text-3xl md:text-4xl font-bold mt-2 mb-4">${post.title.rendered}</h1>
-                        <p id="${prefix}-excerpt" class="text-gray-600 mb-4">${post?.yoast_head_json?.description || ""}</p>
-                        <div class="flex items-center text-sm text-gray-500">
-                            <span>By Elizabeth Thompson</span>
-                            <span class="mx-2">•</span>
-                            <span>3 hours ago</span>
-                        </div>
-
-                        
-                        <button  href="#story-${post.id}" id="${prefix}-link" data-story-id="${post.id}" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-medium">Read Full Story</button>
-                    </div>
-                </div>
+            <div class="p-6 md:w-1/3">
+              <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">FEATURED</span>
+              <h1 id="${prefix}-title" class="headline-font text-3xl md:text-4xl font-bold mt-2 mb-4">${post.title.rendered}</h1>
+              <p id="${prefix}-excerpt" class="text-gray-600 mb-4">${post?.yoast_head_json?.description || ""}</p>
+              <div class="flex items-center text-sm text-gray-500">
+                <span>By Elizabeth Thompson</span>
+                <span class="mx-2">•</span>
+                <span>${fmtDate(post.date)}</span>
+              </div>
+              <button data-story-id="${post.id}" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-medium">Read Full Story</button>
             </div>
-        </section>`,
+          </div>
+        </div>
+      </section>`,
+
+    featured: (post, prefix) => `
+      <section class="mb-12" data-aos="fade-up">
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+          <div class="md:flex">
+            <div class="md:w-2/3">
+              <img src="${imgFrom(post)}" alt="${post.title.rendered}">
+            </div>
+            <div class="p-6 md:w-1/3">
+              <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">FEATURED</span>
+              <h1 id="${prefix}-title" class="headline-font text-3xl md:text-4xl font-bold mt-2 mb-4">${post.title.rendered}</h1>
+              <p id="${prefix}-excerpt" class="text-gray-600 mb-4">${post?.yoast_head_json?.description || ""}</p>
+              <div class="flex items-center text-sm text-gray-500">
+                <span>By Elizabeth Thompson</span>
+                <span class="mx-2">•</span>
+                <span>${fmtDate(post.date)}</span>
+              </div>
+              <button data-story-id="${post.id}" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-medium">Read Full Story</button>
+            </div>
+          </div>
+        </div>
+      </section>`,
+
     gridWrap: (title, feedId) => `
       <section class="mb-12">
         <h2 class="headline-font text-2xl font-bold mb-6 border-b border-gray-200 pb-2">${title}</h2>
         <div id="${feedId}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
       </section>`,
-card: (post) => `
-  <div class="bg-white rounded-lg overflow-hidden shadow-sm news-card">
-     <a href="#story-${post.id}" data-story-id="${post.id}">
-      <img
-        src="${imgFrom(post)}"
-        alt=""
-        loading="lazy"
-        decoding="async"
-        class="w-full h-48 object-cover"
-        onerror="this.style.display='none'">
-      <div class="p-4">
-        <span class="text-xs text-gray-500">${post?.yoast_head_json?.author || "Unknown"} • ${fmtDate(post.date)}</span>
-        <h3 class="news-title headline-font font-bold text-lg my-2">${post.title.rendered}</h3>
-        <p class="text-gray-600 text-sm">${post?.yoast_head_json?.description || ""}</p>
-      </div>
-    </a>
-  </div>`,
+
+    card: (post) => `
+      <div class="bg-white rounded-lg overflow-hidden shadow-sm news-card">
+        <a href="#story-${post.id}" data-story-id="${post.id}">
+          <img
+            src="${imgFrom(post)}"
+            alt=""
+            loading="lazy"
+            decoding="async"
+            class="w-full h-48 object-cover"
+            onerror="this.style.display='none'">
+          <div class="p-4">
+            <span class="text-xs text-gray-500">${post?.yoast_head_json?.author || "Unknown"} • ${fmtDate(post.date)}</span>
+            <h3 class="news-title headline-font font-bold text-lg my-2">${post.title.rendered}</h3>
+            <p class="text-gray-600 text-sm">${post?.yoast_head_json?.description || ""}</p>
+          </div>
+        </a>
+      </div>`,
+
     storyShell: () => `
       <div id="story" class="section">
         <main class="container mx-auto px-4 my-8">
@@ -298,55 +338,51 @@ card: (post) => `
               <img id="article-image" alt="" class="w-full h-auto rounded-lg" />
             </div>
             <div class="article-content text-gray-800 mb-12" id="article-content"></div>
-<button id="back-button" class="mt-6 text-blue-700 font-medium">← Back</button>
+            <button id="back-button" class="mt-6 text-blue-700 font-medium">← Back</button>
           </article>
         </main>
       </div>`
   };
 
-  // Hash parser for deep links like #story-123
   function parseHash(){
     const raw = (location.hash||"").replace('#','');
     const m = raw.match(/^story[-=](\d+)$/);
     return m ? { type:'story', id:m[1] } : { type: raw || 'home' };
   }
 
-  // Shells
   function mountShells(){
     const root = qs('#root');
     root.innerHTML = '';
 
-    // Home shell
     const homeEl = document.createElement('div');
     homeEl.id = 'home';
     homeEl.className = 'section active';
-homeEl.innerHTML = `
-  <section id="home-hero-slot" class="mb-8">
-    <div class="bg-white rounded-lg shadow-md overflow-hidden">
-      <div class="md:flex">
-        <div class="md:w-2/3">
-          <div class="w-full h-64 md:h-96 bg-gray-200 animate-pulse"></div>
+    homeEl.innerHTML = `
+      <section id="home-hero-slot" class="mb-8">
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+          <div class="md:flex">
+            <div class="md:w-2/3">
+              <div class="w-full h-64 md:h-96 bg-gray-200 animate-pulse"></div>
+            </div>
+            <div class="p-6 md:w-1/3">
+              <div class="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+              <div class="mt-3 h-8 w-full bg-gray-200 rounded animate-pulse"></div>
+              <div class="mt-2 h-8 w-3/4 bg-gray-200 rounded animate-pulse"></div>
+              <div class="mt-4 h-4 w-full bg-gray-200 rounded animate-pulse"></div>
+              <div class="mt-2 h-4 w-5/6 bg-gray-200 rounded animate-pulse"></div>
+              <div class="mt-6 h-10 w-40 bg-gray-200 rounded-full animate-pulse"></div>
+            </div>
+          </div>
         </div>
-        <div class="p-6 md:w-1/3">
-          <div class="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
-          <div class="mt-3 h-8 w-full bg-gray-200 rounded animate-pulse"></div>
-          <div class="mt-2 h-8 w-3/4 bg-gray-200 rounded animate-pulse"></div>
-          <div class="mt-4 h-4 w-full bg-gray-200 rounded animate-pulse"></div>
-          <div class="mt-2 h-4 w-5/6 bg-gray-200 rounded animate-pulse"></div>
-          <div class="mt-6 h-10 w-40 bg-gray-200 rounded-full animate-pulse"></div>
-        </div>
-      </div>
-    </div>
-  </section>
-  ${tpl.gridWrap('Latest legal stories', 'home-feed')}
-`;
-
+      </section>
+      ${tpl.gridWrap('Latest legal stories', 'home-feed')}
+    `;
     root.appendChild(homeEl);
 
-    // Category shells
     for (const c of CATS.filter(x => x.type==='category')){
       const div = document.createElement('div');
-      div.id = c.key; div.className = 'section';
+      div.id = c.key;
+      div.className = 'section';
       div.innerHTML = `
         <section class="mb-12"><div id="${c.key}-featured-slot"></div></section>
         ${tpl.gridWrap('Latest', c.key+'-feed')}
@@ -354,264 +390,396 @@ homeEl.innerHTML = `
       root.appendChild(div);
     }
 
-    // Story shell
     const storyWrap = document.createElement('div');
     storyWrap.innerHTML = tpl.storyShell();
     root.appendChild(storyWrap.firstElementChild);
   }
-  const maxstories=16;
 
-  // Navs
   function mountNavs(){
-    const links = CATS.map(tpl.navLink).join('');
-    qs('#top-nav').innerHTML = links;
+    qs('#top-nav').innerHTML = CATS.map(tpl.navLink).join('');
     qs('#mobile-nav').innerHTML = CATS.map(c=>`<a href="#${c.key}" data-section="${c.key}" class="p-2 rounded hover:bg-gray-100">${c.label}</a>`).join('');
     qs('#footer-nav').innerHTML = CATS.map(tpl.footerLink).join('');
   }
 
-  // Fetchers (search-based)
-async function fetchPosts(query){
-  const url = new URL(API);
-  Object.entries(query).forEach(([k,v])=> url.searchParams.set(k,v));
-  try{
-    const res = await fetch(url.toString());
-    if(!res.ok) throw new Error('Bad response');
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
-}
-
-
-  // Get a list for a legal topic using WP search
-async function loadBySearch(term, wantCount){
-  const perPage = Math.min(100, wantCount * 2); // ask for more than needed to reduce extra requests
-  let page = 1;
-  const out = [];
-
-  while(out.length < wantCount && page <= 6){   // hard stop to avoid endless loops
-    const batch = await fetchPosts({ per_page: perPage, page, _embed: '', search: term });
-    if(!batch.length) break;
-
-    for(const p of batch){
-      if(!seenAll.has(p.id)){
-        out.push(p);
-        if(out.length >= wantCount) break;
-      }
-    }
-
-    // If we got fewer than per_page, there probably aren't more pages
-    if(batch.length < perPage) break;
-
-    page += 1;
-  }
-
-  return out;
-}
-
-
-async function loadHome(){
-  const data = await loadBySearch('court OR law OR legal', maxstories);
-  if(!data.length) return;
-
-  // mark globally seen
-  data.forEach(p => seenAll.add(p.id));
-
-  // preload hero image
-  const heroImg = imgFrom(data[0]);
-  if(heroImg){
-    const link = document.createElement('link');
-    link.rel = 'preload';
-    link.as = 'image';
-    link.href = heroImg;
-    document.head.appendChild(link);
-  }
-
-  data.forEach(storePost);
-  qs('#home-hero-slot').innerHTML = tpl.hero(data[0], 'home');
-  pumpCards(qs('#home-feed'),'home', data.slice(1, maxstories));
-}
-
-async function loadCategory(catKey){
-  const cfg = CATS.find(c=>c.key===catKey);
-  if(!cfg) return;
-
-  const data = await loadBySearch(cfg.search, maxstories);
-  if(!data.length) return;
-
-  data.forEach(p => seenAll.add(p.id));
-  data.forEach(storePost);
-
-  const featured = data[0];
-  if(featured) qs(`#${cfg.key}-featured-slot`).innerHTML = tpl.featured(featured, cfg.key);
-
-  pumpCards(qs(`#${cfg.key}-feed`), cfg.key, data.slice(1, maxstories));
-}
-
-
-  function pumpCards(container,key,posts){
-    let i=0; const s=seen[key];
-    function step(){
-      if(i>=posts.length) return;
-      const p=posts[i++];
-      if(!s.has(p.id)){ s.add(p.id); container.insertAdjacentHTML('beforeend', tpl.card(p)); }
-      if('requestIdleCallback' in window) requestIdleCallback(step); else setTimeout(step,60);
-    }
-    step();
-  }
-
-  // Full width banner control
   function setBanner(sectionKey){
     const banner = qs('#category-banner');
     const titleEl = qs('#category-banner-title');
     const subEl = qs('#category-banner-subtitle');
     const cfg = CATS.find(c=>c.key===sectionKey);
     const isCat = cfg && cfg.type==='category';
-    if(isCat){ titleEl.textContent = cfg.label; subEl.textContent = cfg.tagline || ''; banner.classList.remove('hidden'); }
-    else { banner.classList.add('hidden'); titleEl.textContent=''; subEl.textContent=''; }
+    if (isCat){
+      titleEl.textContent = cfg.label;
+      subEl.textContent = cfg.tagline || '';
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+      titleEl.textContent = '';
+      subEl.textContent = '';
+    }
   }
 
-  // Router
-function showSection(id){
-  window.scrollTo(0, 0); // jump immediately
+  function pumpCards(container, key, posts){
+    let i = 0;
+    const s = seen[key];
+    function step(){
+      if (i >= posts.length) return;
+      const p = posts[i++];
+      if (!p || !p.id) return scheduleNext();
+      if (!s.has(p.id)){
+        s.add(p.id);
+        container.insertAdjacentHTML('beforeend', tpl.card(p));
+      }
+      scheduleNext();
+    }
+    function scheduleNext(){
+      if ('requestIdleCallback' in window) requestIdleCallback(step);
+      else setTimeout(step, 40);
+    }
+    step();
+  }
 
-  qsa('.section').forEach(s=>s.classList.remove('active'));
-  const target = qs('#'+(id||'home')) || qs('#home');
-  target.classList.add('active');
-  setBanner(id);
+  function clearFeedUI(key){
+    if (key === 'home'){
+      const feed = qs('#home-feed');
+      if (feed) feed.innerHTML = '';
+    } else {
+      const feed = qs(`#${key}-feed`);
+      if (feed) feed.innerHTML = '';
+      const feat = qs(`#${key}-featured-slot`);
+      if (feat) feat.innerHTML = '';
+    }
+  }
 
+  function hydrateSectionFromCache(key){
+    const ids = loadFeedIds(key);
+    if (!ids.length) return false;
 
-    if(!loaded[id] && !inflight[id]){
-      inflight[id]=true; loaded[id]=true;
-      if(id==='home') loadHome().finally(()=>inflight[id]=false);
-      else if(CATS.find(c=>c.key===id && c.type==='category')) loadCategory(id).finally(()=>inflight[id]=false);
-      else inflight[id]=false;
+    const posts = ids.map(id => getPost(id)).filter(Boolean);
+    if (!posts.length) return false;
+
+    posts.forEach(p => seenAll.add(p.id));
+
+    clearFeedUI(key);
+
+    if (key === 'home'){
+      const hero = posts[0];
+      if (hero){
+        qs('#home-hero-slot').innerHTML = tpl.hero(hero, 'home');
+      }
+      const rest = posts.slice(1, maxstories);
+      pumpCards(qs('#home-feed'), 'home', rest);
+    } else {
+      const cfg = CATS.find(c => c.key === key);
+      const featured = posts[0];
+      if (featured && cfg){
+        qs(`#${cfg.key}-featured-slot`).innerHTML = tpl.featured(featured, cfg.key);
+      }
+      const rest = posts.slice(1, maxstories);
+      pumpCards(qs(`#${key}-feed`), key, rest);
+    }
+
+    loaded[key] = true;
+    inflight[key] = false;
+    return true;
+  }
+
+  async function fetchPosts(query){
+    const url = new URL(API);
+    Object.entries(query).forEach(([k,v]) => url.searchParams.set(k,v));
+    try{
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error('Bad response');
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async function loadBySearch(term, wantCount){
+    const perPage = Math.min(100, wantCount * 2);
+    let page = 1;
+    const out = [];
+
+    while(out.length < wantCount && page <= 6){
+      const batch = await fetchPosts({ per_page: perPage, page, _embed: '', search: term });
+      if (!batch.length) break;
+
+      for (const p of batch){
+        if (!seenAll.has(p.id)){
+          out.push(p);
+          if (out.length >= wantCount) break;
+        }
+      }
+
+      if (batch.length < perPage) break;
+      page += 1;
+    }
+
+    return out;
+  }
+
+  async function fetchAndRenderHome(){
+    const data = await loadBySearch('court OR law OR legal', maxstories);
+    if (!data.length) return;
+
+    data.forEach(p => { seenAll.add(p.id); storePost(p); });
+
+    const heroImg = imgFrom(data[0]);
+    if (heroImg){
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'image';
+      link.href = heroImg;
+      document.head.appendChild(link);
+    }
+
+    clearFeedUI('home');
+    qs('#home-hero-slot').innerHTML = tpl.hero(data[0], 'home');
+    pumpCards(qs('#home-feed'), 'home', data.slice(1, maxstories));
+
+    storeFeed('home', data.slice(0, maxstories));
+  }
+
+  async function fetchAndRenderCategory(catKey){
+    const cfg = CATS.find(c => c.key === catKey);
+    if (!cfg) return;
+
+    const data = await loadBySearch(cfg.search, maxstories);
+    if (!data.length) return;
+
+    data.forEach(p => { seenAll.add(p.id); storePost(p); });
+
+    clearFeedUI(catKey);
+
+    const featured = data[0];
+    if (featured){
+      qs(`#${cfg.key}-featured-slot`).innerHTML = tpl.featured(featured, cfg.key);
+    }
+
+    pumpCards(qs(`#${cfg.key}-feed`), cfg.key, data.slice(1, maxstories));
+
+    storeFeed(cfg.key, data.slice(0, maxstories));
+  }
+
+  function showSection(id){
+    window.scrollTo(0,0);
+
+    qsa('.section').forEach(s => s.classList.remove('active'));
+    const target = qs('#'+(id||'home')) || qs('#home');
+    target.classList.add('active');
+
+    setBanner(id);
+
+    const key = id || 'home';
+
+    if (!loaded[key] && !inflight[key]){
+      inflight[key] = true;
+
+      const fresh = isFresh();
+      const didHydrate = fresh ? hydrateSectionFromCache(key) : false;
+
+      if (didHydrate){
+        inflight[key] = false;
+        return;
+      }
+
+      const runFetch = async () => {
+        try {
+          if (key === 'home') await fetchAndRenderHome();
+          else if (CATS.find(c => c.key === key && c.type === 'category')) await fetchAndRenderCategory(key);
+          markFetchedNow();
+        } finally {
+          loaded[key] = true;
+          inflight[key] = false;
+        }
+      };
+
+      runFetch();
     }
   }
 
   async function showStory(id){
     let data = getPost(id);
-    if(!data){ try{ const res = await fetch(`${API}/${id}?_embed`); if(res.ok){ data = await res.json(); storePost(data); } } catch{}
+
+    if (!data){
+      try{
+        const res = await fetch(`${API}/${id}?_embed`);
+        if (res.ok){
+          data = await res.json();
+          storePost(data);
+        }
+      } catch {}
     }
-    const setText = (sel,val)=>{ const el=qs(sel); if(el) el.textContent = val||''; };
-    const setHTML = (sel,val)=>{ const el=qs(sel); if(el) el.innerHTML = val||''; };
-    if(!data){ setText('#article-title','Article not found'); setHTML('#article-content','<p class="text-center text-gray-500">Sorry, we could not load this story.</p>'); showSection('story'); scrollToTop(); return; }
+
+    const setText = (sel, val) => { const el = qs(sel); if (el) el.textContent = val || ''; };
+    const setHTML = (sel, val) => { const el = qs(sel); if (el) el.innerHTML = val || ''; };
+
+    if (!data){
+      setText('#article-title','Article not found');
+      setHTML('#article-content','<p class="text-center text-gray-500">Sorry, we could not load this story.</p>');
+      setBanner('');
+      qsa('.section').forEach(s => s.classList.remove('active'));
+      qs('#story').classList.add('active');
+      window.scrollTo(0,0);
+      return;
+    }
 
     setHTML('#article-title', data.title.rendered);
     setText('#article-excerpt', data?.yoast_head_json?.description || '');
-    const raw = data?.content?.rendered || '';
-    setHTML('#article-content', transformEmbeds(raw, data));
+    setHTML('#article-content', transformEmbeds(data?.content?.rendered || ''));
     setText('#article-date', fmtDate(data.date));
 
-    const author = data?.yoast_head_json?.author; const box = qs('#article-author-box');
-    if(author){ qs('#article-author').textContent = author; box.style.display='flex'; } else { box.style.display='none'; }
+    const author = data?.yoast_head_json?.author;
+    const box = qs('#article-author-box');
+    if (author){
+      qs('#article-author').textContent = author;
+      box.style.display = 'flex';
+    } else {
+      box.style.display = 'none';
+    }
 
-    const img = imgFrom(data); const imgBox = qs('#article-image-box');
-    if(img){ const el = qs('#article-image'); el.src = img; el.alt = data.title.rendered; imgBox.style.display='block'; } else { imgBox.style.display='none'; }
+    const img = imgFrom(data);
+    const imgBox = qs('#article-image-box');
+    if (img){
+      const el = qs('#article-image');
+      el.src = img;
+      el.alt = data.title.rendered;
+      imgBox.style.display = 'block';
+    } else {
+      imgBox.style.display = 'none';
+    }
 
     setBanner('');
-    if(location.hash!==`#story-${id}`) location.hash = `#story-${id}`;
-    qsa('.section').forEach(s=>s.classList.remove('active'));
+    if (location.hash !== `#story-${id}`) location.hash = `#story-${id}`;
+
+    qsa('.section').forEach(s => s.classList.remove('active'));
     qs('#story').classList.add('active');
-    scrollToTop();
+    window.scrollTo(0,0);
   }
 
-  // Prefetch once
-function prefetchHomeFirst(){
-  if(loaded.home || inflight.home) return;
-  inflight.home = true; loaded.home = true;
-  return loadHome().finally(()=> inflight.home = false);
-}
+  function shouldPrefetchBackground(){
+    return !isFresh();
+  }
 
-function prefetchCategoriesLater(){
-  // if user is on slow data, don’t hammer the connection
-  const conn = navigator.connection;
-  const slow = conn && (conn.saveData || /2g/.test(conn.effectiveType || ""));
-  const delay = slow ? 4000 : 1200;
+  function prefetchOthersAfter(firstKey){
+    if (!shouldPrefetchBackground()) return;
 
-  setTimeout(() => {
-    const run = () => {
-      for(const c of CATS.filter(x => x.type === 'category')){
-        if(!loaded[c.key] && !inflight[c.key]){
-          inflight[c.key] = true; loaded[c.key] = true;
-          loadCategory(c.key).finally(()=> inflight[c.key] = false);
+    const conn = navigator.connection;
+    const slow = conn && (conn.saveData || /2g/.test(conn.effectiveType || ""));
+    const delay = slow ? 4000 : 900;
+
+    setTimeout(() => {
+      const run = () => {
+        for (const c of CATS){
+          const key = c.key;
+          if (key === firstKey) continue;
+
+          if (loaded[key] || inflight[key]) continue;
+
+          inflight[key] = true;
+
+          const task = async () => {
+            try{
+              if (key === 'home') await fetchAndRenderHome();
+              else if (c.type === 'category') await fetchAndRenderCategory(key);
+              markFetchedNow();
+            } finally {
+              loaded[key] = true;
+              inflight[key] = false;
+            }
+          };
+
+          task();
         }
-      }
-    };
-    if ('requestIdleCallback' in window) requestIdleCallback(run);
-    else setTimeout(run, 0);
-  }, delay);
-}
+      };
 
-
-  // Events
-  document.addEventListener('click', (e)=>{
-    const sec = e.target.closest('[data-section]');
-    if(sec){ e.preventDefault(); const id=sec.getAttribute('data-section'); showSection(id); location.hash=id; scrollToTop(); closeMenu(); return; }
-    const story = e.target.closest('[data-story-id]');
-    if(story){ e.preventDefault(); const id = story.getAttribute('data-story-id'); if(id) showStory(id); closeMenu(); }
-  });
-  document.addEventListener('click', (e) => {
-  const back = e.target.closest('#back-button');
-  if (!back) return;
-
-  e.preventDefault();
-
-  if (history.length > 1) {
-    history.back();      // behaves like real page navigation
-  } else {
-    location.hash = '#home';
-    showSection('home');
+      if ('requestIdleCallback' in window) requestIdleCallback(run);
+      else setTimeout(run, 0);
+    }, delay);
   }
-});
 
-
-  // Mobile menu
   function openMenu(){ qs('#mobile-menu').classList.remove('hidden'); }
   function closeMenu(){ qs('#mobile-menu').classList.add('hidden'); }
-  
-  document.addEventListener('DOMContentLoaded', ()=>{
+
+  document.addEventListener('click', (e) => {
+    const sec = e.target.closest('[data-section]');
+    if (sec){
+      e.preventDefault();
+      const id = sec.getAttribute('data-section') || 'home';
+      closeMenu();
+      if (location.hash !== `#${id}`) location.hash = `#${id}`;
+      showSection(id);
+
+      setTimeout(() => prefetchOthersAfter(id), 0);
+      return;
+    }
+
+    const story = e.target.closest('[data-story-id]');
+    if (story){
+      e.preventDefault();
+      const id = story.getAttribute('data-story-id');
+      closeMenu();
+      if (id) showStory(id);
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const back = e.target.closest('#back-button');
+    if (!back) return;
+    e.preventDefault();
+
+    if (history.length > 1) history.back();
+    else { location.hash = '#home'; showSection('home'); }
+  });
+
+  window.addEventListener('hashchange', () => {
+    const h = parseHash();
+    if (h.type === 'story') { showStory(h.id); return; }
+
+    const key = h.type || 'home';
+    showSection(key);
+    setTimeout(() => prefetchOthersAfter(key), 0);
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
     const strip = document.getElementById('breaking-strip');
     if (strip) strip.style.display = 'block';
 
     const y = document.getElementById('year');
-    if(y) y.textContent = new Date().getFullYear();
+    if (y) y.textContent = new Date().getFullYear();
 
     mountShells();
     mountNavs();
 
-    // show section immediately (skeleton already visible)
     const h = parseHash();
-    if(h.type==='story') showStory(h.id);
-    else showSection(h.type);
 
-    // Load home first, then prefetch categories
-    prefetchHomeFirst()?.then(() => {
-      prefetchCategoriesLater();
-    });
+    if (h.type === 'story'){
+      showStory(h.id);
+      return;
+    }
+
+    const firstKey = h.type || 'home';
+
+    showSection(firstKey);
+
+    if (shouldPrefetchBackground()){
+      setTimeout(() => prefetchOthersAfter(firstKey), 0);
+    }
 
     requestAnimationFrame(() => {
-      if(window.AOS?.init) AOS.init();
-      if(window.feather?.replace) feather.replace();
+      if (window.AOS?.init) AOS.init();
+      if (window.feather?.replace) feather.replace();
     });
   });
-
 
   document.getElementById('open-menu').addEventListener('click', openMenu);
   document.getElementById('close-menu').addEventListener('click', closeMenu);
-  qs('#mobile-menu').addEventListener('click', (e)=>{ if(e.target.id==='mobile-menu') closeMenu(); });
+  qs('#mobile-menu').addEventListener('click', (e) => { if (e.target.id === 'mobile-menu') closeMenu(); });
 
-  // Back/forward
-  window.addEventListener('hashchange', ()=>{
-    const h = parseHash();
-    if(h.type==='story'){ showStory(h.id); return; }
-    showSection(h.type||'home');
-  });
-
-  // Expose
-  window.app = { showSection, showStory, prefetchAll };
+  window.app = { showSection, showStory };
 })();
 </script>
+
 </body>
 </html>
