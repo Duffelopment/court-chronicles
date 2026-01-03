@@ -21,6 +21,7 @@ Thumbs.db
 
 # Local scripts
 update.bat
+uploadtoneo.py
 
 # Editor files
 .vscode/
