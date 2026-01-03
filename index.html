@@ -168,6 +168,8 @@
   const seen = Object.fromEntries(CATS.map(c => [c.key, new Set()]));
   const cache = new Map();
   let prefetchStarted = false;
+  const seenAll = new Set();  // IDs shown anywhere on the site
+
 
   // Utils
   const qs = (sel, el=document) => el.querySelector(sel);
@@ -368,47 +370,85 @@ homeEl.innerHTML = `
   }
 
   // Fetchers (search-based)
-  async function fetchPosts(query){
-    const url = new URL(API);
-    Object.entries(query).forEach(([k,v])=> url.searchParams.set(k,v));
-    try{ const res = await fetch(url.toString()); if(!res.ok) throw new Error('Bad response'); const data = await res.json(); return Array.isArray(data)?data:[]; } catch{ return []; }
+async function fetchPosts(query){
+  const url = new URL(API);
+  Object.entries(query).forEach(([k,v])=> url.searchParams.set(k,v));
+  try{
+    const res = await fetch(url.toString());
+    if(!res.ok) throw new Error('Bad response');
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
   }
+}
+
 
   // Get a list for a legal topic using WP search
-  async function loadBySearch(term){
-    // WP search is fuzzy; we also request _embed for media
-    return await fetchPosts({ per_page: maxstories, _embed: '', search: term });
-  }
+async function loadBySearch(term, wantCount){
+  const perPage = Math.min(100, wantCount * 2); // ask for more than needed to reduce extra requests
+  let page = 1;
+  const out = [];
 
-  async function loadHome(){
-    // Use a broad legal query for home
-    const data = await loadBySearch('court OR law OR legal');
-    if(!data.length) return;
-    const heroImg = imgFrom(data[0]);
-    if(heroImg){
-      const link = document.createElement('link');
-      link.rel = 'preload';
-      link.as = 'image';
-      link.href = heroImg;
-      document.head.appendChild(link);
+  while(out.length < wantCount && page <= 6){   // hard stop to avoid endless loops
+    const batch = await fetchPosts({ per_page: perPage, page, _embed: '', search: term });
+    if(!batch.length) break;
+
+    for(const p of batch){
+      if(!seenAll.has(p.id)){
+        out.push(p);
+        if(out.length >= wantCount) break;
+      }
     }
-    qs('#home-hero-slot').innerHTML = tpl.hero(data[0], 'home');
 
-    data.forEach(storePost);
-    qs('#home-hero-slot').innerHTML = tpl.hero(data[0]);
-    pumpCards(qs('#home-feed'),'home', data.slice(1,maxstories));
+    // If we got fewer than per_page, there probably aren't more pages
+    if(batch.length < perPage) break;
+
+    page += 1;
   }
 
-  async function loadCategory(catKey){
-    const cfg = CATS.find(c=>c.key===catKey);
-    if(!cfg) return;
-    const data = await loadBySearch(cfg.search);
-    if(!data.length) return;
-    data.forEach(storePost);
-    const featured = data[0] || data[1];
-    if(featured) qs(`#${cfg.key}-featured-slot`).innerHTML = tpl.featured(featured, cfg.key);
-    pumpCards(qs(`#${cfg.key}-feed`), cfg.key, data.slice(1,maxstories));
+  return out;
+}
+
+
+async function loadHome(){
+  const data = await loadBySearch('court OR law OR legal', maxstories);
+  if(!data.length) return;
+
+  // mark globally seen
+  data.forEach(p => seenAll.add(p.id));
+
+  // preload hero image
+  const heroImg = imgFrom(data[0]);
+  if(heroImg){
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'image';
+    link.href = heroImg;
+    document.head.appendChild(link);
   }
+
+  data.forEach(storePost);
+  qs('#home-hero-slot').innerHTML = tpl.hero(data[0], 'home');
+  pumpCards(qs('#home-feed'),'home', data.slice(1, maxstories));
+}
+
+async function loadCategory(catKey){
+  const cfg = CATS.find(c=>c.key===catKey);
+  if(!cfg) return;
+
+  const data = await loadBySearch(cfg.search, maxstories);
+  if(!data.length) return;
+
+  data.forEach(p => seenAll.add(p.id));
+  data.forEach(storePost);
+
+  const featured = data[0];
+  if(featured) qs(`#${cfg.key}-featured-slot`).innerHTML = tpl.featured(featured, cfg.key);
+
+  pumpCards(qs(`#${cfg.key}-feed`), cfg.key, data.slice(1, maxstories));
+}
+
 
   function pumpCards(container,key,posts){
     let i=0; const s=seen[key];
@@ -478,16 +518,32 @@ function showSection(id){
   }
 
   // Prefetch once
-  function prefetchAll(){
-    if(prefetchStarted) return; prefetchStarted=true;
-    const run=()=>{
-      if(!loaded.home && !inflight.home){ inflight.home=true; loaded.home=true; loadHome().finally(()=>inflight.home=false); }
-      for(const c of CATS.filter(x=>x.type==='category')){
-        if(!loaded[c.key] && !inflight[c.key]){ inflight[c.key]=true; loaded[c.key]=true; loadCategory(c.key).finally(()=>inflight[c.key]=false); }
+function prefetchHomeFirst(){
+  if(loaded.home || inflight.home) return;
+  inflight.home = true; loaded.home = true;
+  return loadHome().finally(()=> inflight.home = false);
+}
+
+function prefetchCategoriesLater(){
+  // if user is on slow data, don’t hammer the connection
+  const conn = navigator.connection;
+  const slow = conn && (conn.saveData || /2g/.test(conn.effectiveType || ""));
+  const delay = slow ? 4000 : 1200;
+
+  setTimeout(() => {
+    const run = () => {
+      for(const c of CATS.filter(x => x.type === 'category')){
+        if(!loaded[c.key] && !inflight[c.key]){
+          inflight[c.key] = true; loaded[c.key] = true;
+          loadCategory(c.key).finally(()=> inflight[c.key] = false);
+        }
       }
     };
-    if('requestIdleCallback' in window) requestIdleCallback(run); else setTimeout(run,250);
-  }
+    if ('requestIdleCallback' in window) requestIdleCallback(run);
+    else setTimeout(run, 0);
+  }, delay);
+}
+
 
   // Events
   document.addEventListener('click', (e)=>{
@@ -514,23 +570,33 @@ function showSection(id){
   // Mobile menu
   function openMenu(){ qs('#mobile-menu').classList.remove('hidden'); }
   function closeMenu(){ qs('#mobile-menu').classList.add('hidden'); }
-document.addEventListener('DOMContentLoaded', ()=>{
-  const strip = document.getElementById('breaking-strip');
-if (strip) strip.style.display = 'block';
+  
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const strip = document.getElementById('breaking-strip');
+    if (strip) strip.style.display = 'block';
 
-  const y = document.getElementById('year'); if(y) y.textContent = new Date().getFullYear();
+    const y = document.getElementById('year');
+    if(y) y.textContent = new Date().getFullYear();
 
-  requestAnimationFrame(() => {
-    if(window.AOS?.init) AOS.init();
-    if(window.feather?.replace) feather.replace();
+    mountShells();
+    mountNavs();
+
+    // show section immediately (skeleton already visible)
+    const h = parseHash();
+    if(h.type==='story') showStory(h.id);
+    else showSection(h.type);
+
+    // Load home first, then prefetch categories
+    prefetchHomeFirst()?.then(() => {
+      prefetchCategoriesLater();
+    });
+
+    requestAnimationFrame(() => {
+      if(window.AOS?.init) AOS.init();
+      if(window.feather?.replace) feather.replace();
+    });
   });
 
-  mountShells();
-  mountNavs();
-  const h = parseHash();
-  if(h.type==='story') showStory(h.id); else showSection(h.type);
-  prefetchAll();
-});
 
   document.getElementById('open-menu').addEventListener('click', openMenu);
   document.getElementById('close-menu').addEventListener('click', closeMenu);
