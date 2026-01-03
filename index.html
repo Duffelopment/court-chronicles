@@ -6,10 +6,14 @@
   <title>The Australian Court Chronicle</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet" />
-  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+<script defer src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+
+
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Roboto:wght@300;400;500&display=swap');
     body{font-family:'Roboto',sans-serif}
     .headline-font{font-family:'Playfair Display',serif}
     .nav-link:hover{text-decoration:underline;text-underline-offset:8px;text-decoration-thickness:2px}
@@ -27,17 +31,46 @@
     .aspect-video>iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
     .breaking{animation:pulse 2s infinite}
     @keyframes pulse{0%{background:#dc2626}50%{background:#b91c1c}100%{background:#dc2626}}
+
+  .article-content img,
+.article-content figure,
+.article-content iframe,
+.article-content video {
+  max-width: 100%;
+  height: auto;
+}
+
+.article-content figure {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.article-content * {
+  overflow-wrap: anywhere;
+}
+
+.article-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
   </style>
 </head>
 <body class="bg-gray-50">
-
-  <!-- Breaking strip -->
-  <div class="breaking py-2 px-4 text-white text-center font-medium hidden md:block">
-    <div class="container mx-auto flex items-center justify-center">
-      <span class="mr-2 font-bold">BREAKING:</span>
-      <span class="truncate">Live: major judgment handed down. Full coverage and analysis inside.</span>
-    </div>
+  
+<!-- Breaking strip -->
+<div
+  id="breaking-strip"
+  style="display:none; background:#dc2626;"
+  class="breaking py-2 px-4 text-white text-center font-medium">
+  <div class="container mx-auto flex items-center justify-center">
+    <span class="mr-2 font-bold">BREAKING:</span>
+    <span class="truncate">Live: major judgment handed down. Full coverage and analysis inside.</span>
   </div>
+</div>
+
+
 
   <!-- Header -->
   <header class="border-b border-gray-200 bg-white sticky top-0 z-50">
@@ -63,7 +96,7 @@
 
 
   <!-- Mobile menu -->
-  <aside id="mobile-menu" class="md:hidden fixed inset-0 bg-black/40 hidden">
+<aside id="mobile-menu" class="md:hidden fixed inset-0 bg-black/40 hidden z-[9999]">
     <div class="absolute right-0 top-0 bottom-0 w-64 bg-white shadow-lg p-4">
       <div class="flex items-center justify-between mb-4">
         <span class="font-bold">Menu</span>
@@ -141,7 +174,9 @@
   const qsa = (sel, el=document) => Array.from(el.querySelectorAll(sel));
   const fmtDate = (iso) => new Date(iso).toLocaleDateString();
   const setYear = () => { const y = document.getElementById("year"); if (y) y.textContent = new Date().getFullYear(); };
-  const scrollToTop = () => { try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { window.scrollTo(0,0); } };
+const scrollToTop = () => {
+  window.scrollTo(0, 0);
+};
 
   function imgFrom(post){
     const yo = post?.yoast_head_json?.og_image?.[0]?.url; if (yo) return yo;
@@ -168,7 +203,15 @@
             <div class="bg-white rounded-lg shadow-md overflow-hidden">
                 <div class="md:flex">
                     <div class="md:w-2/3">
-                        <img src="${imgFrom(post)}" alt="${post.title.rendered}">
+                        <img
+                          src="${imgFrom(post)}"
+                          alt="${post.title.rendered}"
+                          loading="eager"
+                          fetchpriority="high"
+                          decoding="async"
+                          class="w-full h-full object-cover"
+                        />
+
                     </div>
                     <div class="p-6 md:w-1/3">
                         <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">FEATURED</span>
@@ -214,17 +257,23 @@
         <h2 class="headline-font text-2xl font-bold mb-6 border-b border-gray-200 pb-2">${title}</h2>
         <div id="${feedId}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
       </section>`,
-    card: (post) => `
-      <div class="bg-white rounded-lg overflow-hidden shadow-sm news-card">
-        <a href="#story-${post.id}" data-story-id="${post.id}">
-          <img src="${imgFrom(post)}" alt="" loading="lazy" class="w-full h-48 object-cover" onerror="this.style.display='none'">
-          <div class="p-4">
-            <span class="text-xs text-gray-500">${post?.yoast_head_json?.author || "Unknown"} • ${fmtDate(post.date)}</span>
-            <h3 class="news-title headline-font font-bold text-lg my-2">${post.title.rendered}</h3>
-            <p class="text-gray-600 text-sm">${post?.yoast_head_json?.description || ""}</p>
-          </div>
-        </a>
-      </div>` ,
+card: (post) => `
+  <div class="bg-white rounded-lg overflow-hidden shadow-sm news-card">
+     <a href="#story-${post.id}" data-story-id="${post.id}">
+      <img
+        src="${imgFrom(post)}"
+        alt=""
+        loading="lazy"
+        decoding="async"
+        class="w-full h-48 object-cover"
+        onerror="this.style.display='none'">
+      <div class="p-4">
+        <span class="text-xs text-gray-500">${post?.yoast_head_json?.author || "Unknown"} • ${fmtDate(post.date)}</span>
+        <h3 class="news-title headline-font font-bold text-lg my-2">${post.title.rendered}</h3>
+        <p class="text-gray-600 text-sm">${post?.yoast_head_json?.description || ""}</p>
+      </div>
+    </a>
+  </div>`,
     storyShell: () => `
       <div id="story" class="section">
         <main class="container mx-auto px-4 my-8">
@@ -247,7 +296,7 @@
               <img id="article-image" alt="" class="w-full h-auto rounded-lg" />
             </div>
             <div class="article-content text-gray-800 mb-12" id="article-content"></div>
-            <button data-section="home" class="mt-6 text-blue-700 font-medium">← Back</button>
+<button id="back-button" class="mt-6 text-blue-700 font-medium">← Back</button>
           </article>
         </main>
       </div>`
@@ -269,10 +318,27 @@
     const homeEl = document.createElement('div');
     homeEl.id = 'home';
     homeEl.className = 'section active';
-    homeEl.innerHTML = `
-      <section id="home-hero-slot" class="mb-8"></section>
-      ${tpl.gridWrap('Latest legal stories', 'home-feed')}
-    `;
+homeEl.innerHTML = `
+  <section id="home-hero-slot" class="mb-8">
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+      <div class="md:flex">
+        <div class="md:w-2/3">
+          <div class="w-full h-64 md:h-96 bg-gray-200 animate-pulse"></div>
+        </div>
+        <div class="p-6 md:w-1/3">
+          <div class="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+          <div class="mt-3 h-8 w-full bg-gray-200 rounded animate-pulse"></div>
+          <div class="mt-2 h-8 w-3/4 bg-gray-200 rounded animate-pulse"></div>
+          <div class="mt-4 h-4 w-full bg-gray-200 rounded animate-pulse"></div>
+          <div class="mt-2 h-4 w-5/6 bg-gray-200 rounded animate-pulse"></div>
+          <div class="mt-6 h-10 w-40 bg-gray-200 rounded-full animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  ${tpl.gridWrap('Latest legal stories', 'home-feed')}
+`;
+
     root.appendChild(homeEl);
 
     // Category shells
@@ -291,6 +357,7 @@
     storyWrap.innerHTML = tpl.storyShell();
     root.appendChild(storyWrap.firstElementChild);
   }
+  const maxstories=10;
 
   // Navs
   function mountNavs(){
@@ -317,9 +384,19 @@
     // Use a broad legal query for home
     const data = await loadBySearch('court OR law OR legal');
     if(!data.length) return;
+    const heroImg = imgFrom(data[0]);
+    if(heroImg){
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'image';
+      link.href = heroImg;
+      document.head.appendChild(link);
+    }
+    qs('#home-hero-slot').innerHTML = tpl.hero(data[0], 'home');
+
     data.forEach(storePost);
     qs('#home-hero-slot').innerHTML = tpl.hero(data[0]);
-    pumpCards(qs('#home-feed'),'home', data.slice(1,10));
+    pumpCards(qs('#home-feed'),'home', data.slice(1,maxstories));
   }
 
   async function loadCategory(catKey){
@@ -330,7 +407,7 @@
     data.forEach(storePost);
     const featured = data[0] || data[1];
     if(featured) qs(`#${cfg.key}-featured-slot`).innerHTML = tpl.featured(featured, cfg.key);
-    pumpCards(qs(`#${cfg.key}-feed`), cfg.key, data.slice(1,10));
+    pumpCards(qs(`#${cfg.key}-feed`), cfg.key, data.slice(1,maxstories));
   }
 
   function pumpCards(container,key,posts){
@@ -356,11 +433,15 @@
   }
 
   // Router
-  function showSection(id){
-    qsa('.section').forEach(s=>s.classList.remove('active'));
-    const target = qs('#'+(id||'home')) || qs('#home');
-    target.classList.add('active');
-    setBanner(id);
+function showSection(id){
+  window.scrollTo(0, 0); // jump immediately
+
+  qsa('.section').forEach(s=>s.classList.remove('active'));
+  const target = qs('#'+(id||'home')) || qs('#home');
+  target.classList.add('active');
+  setBanner(id);
+
+
     if(!loaded[id] && !inflight[id]){
       inflight[id]=true; loaded[id]=true;
       if(id==='home') loadHome().finally(()=>inflight[id]=false);
@@ -415,20 +496,42 @@
     const story = e.target.closest('[data-story-id]');
     if(story){ e.preventDefault(); const id = story.getAttribute('data-story-id'); if(id) showStory(id); closeMenu(); }
   });
+  document.addEventListener('click', (e) => {
+  const back = e.target.closest('#back-button');
+  if (!back) return;
+
+  e.preventDefault();
+
+  if (history.length > 1) {
+    history.back();      // behaves like real page navigation
+  } else {
+    location.hash = '#home';
+    showSection('home');
+  }
+});
+
 
   // Mobile menu
   function openMenu(){ qs('#mobile-menu').classList.remove('hidden'); }
   function closeMenu(){ qs('#mobile-menu').classList.add('hidden'); }
-  document.addEventListener('DOMContentLoaded', ()=>{
-    const y = document.getElementById('year'); if(y) y.textContent = new Date().getFullYear();
+document.addEventListener('DOMContentLoaded', ()=>{
+  const strip = document.getElementById('breaking-strip');
+if (strip) strip.style.display = 'block';
+
+  const y = document.getElementById('year'); if(y) y.textContent = new Date().getFullYear();
+
+  requestAnimationFrame(() => {
     if(window.AOS?.init) AOS.init();
     if(window.feather?.replace) feather.replace();
-    mountShells();
-    mountNavs();
-    const h = parseHash();
-    if(h.type==='story') showStory(h.id); else showSection(h.type);
-    prefetchAll();
   });
+
+  mountShells();
+  mountNavs();
+  const h = parseHash();
+  if(h.type==='story') showStory(h.id); else showSection(h.type);
+  prefetchAll();
+});
+
   document.getElementById('open-menu').addEventListener('click', openMenu);
   document.getElementById('close-menu').addEventListener('click', closeMenu);
   qs('#mobile-menu').addEventListener('click', (e)=>{ if(e.target.id==='mobile-menu') closeMenu(); });
