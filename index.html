@@ -377,7 +377,7 @@ homeEl.innerHTML = `
   // Get a list for a legal topic using WP search
   async function loadBySearch(term){
     // WP search is fuzzy; we also request _embed for media
-    return await fetchPosts({ per_page: 10, _embed: '', search: term });
+    return await fetchPosts({ per_page: maxstories, _embed: '', search: term });
   }
 
   async function loadHome(){
