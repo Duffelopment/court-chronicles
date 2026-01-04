@@ -151,17 +151,20 @@
 
   const CATS = [
     { key: "home", label: "Home", type: "home" },
-    { key: "highcourt", label: "High Court", type: "category", search: "Aus AND law AND High Court", tagline: "Latest from the High Court of Australia" },
+    { key: "highcourt", label: "High Court", type: "category", search: "Aus AND High Court", tagline: "Latest from the High Court of Australia" },
     { key: "federal", label: "Federal Court", type: "category", search: "Aus AND Federal AND Court", tagline: "Decisions and filings across the Federal Court" },
-    { key: "state", label: "NSW Courts", type: "category", search: "NSW AND Law AND Court", tagline: "Key rulings across the states and territories" },
-    { key: "tribunals", label: "Tribunals", type: "category", search: "Aus AND court OR Tribunal OR appeal", tagline: "Significant tribunal decisions and trends" },
-    { key: "analysis", label: "Legal Analysis", type: "category", search: "Aus AND law", tagline: "Explainers and expert commentary" },
-    { key: "judges", label: "Judges", type: "category", search: "Aus AND judge OR justice", tagline: "Appointments, retirements and profiles" },
-    { key: "Cyber", label: "Cyber Crime", type: "category", search: "cyber OR hacker OR breach AND law", tagline: "Technology and Law" },
-    { key: "Tax", label: "Tax", type: "category", search: "aus AND tax AND ato", tagline: "ATO and Tax law" },
+    { key: "state", label: "NSW Courts", type: "category", search: "NSW AND Court", tagline: "Key rulings across the states and territories" },
+    { key: "tribunals", label: "Tribunals", type: "category", search: "Aus AND Tribunal OR appeal", tagline: "Significant tribunal decisions and trends" },
+    { key: "analysis", label: "Legal Analysis", type: "category", search: "Aus AND law AND review", tagline: "Explainers and expert commentary" },
+    { key: "judges", label: "Judges", type: "category", search: "Aus AND judge", tagline: "Appointments, retirements and profiles" },
+    { key: "Cyber", label: "Cyber Crime", type: "category", search: "cyber OR hacker OR breach", tagline: "Technology and Law" },
+    { key: "Tax", label: "Tax", type: "category", search: "aus AND tax OR ato", tagline: "ATO and Tax" },
+      { key: "Corruption", label: "Corruption", type: "category", search: "aus AND corrupt", tagline: "Corruption" },
+
   ];
 
-  const maxstories = 13;
+  var maxstories = 16;
+
 
   const loaded   = Object.fromEntries(CATS.map(c => [c.key, false]));
   const inflight = Object.fromEntries(CATS.map(c => [c.key, false]));
@@ -180,6 +183,30 @@
     post: (id) => `article-${id}`,
   };
 
+  const HOME_OVERRIDES = {
+    enabled: false,              // flip this on/off
+    index: 1,                   // 0 = hero, 1 = first card in the grid, 2 = second card, etc
+    article: {
+      id: "custom-home-1",      // string id is fine for custom content
+      date: new Date().toISOString(),
+      title: { rendered: "My Exclusive: Why this judgment matters" },
+      yoast_head_json: {
+        description: "A short deck explaining the key issue, what the orders do, and what happens next.",
+        author: "Chris"
+      },
+      _custom: true,            // marker so we can handle it safely
+      _custom_image: "https://picsum.photos/1200/800", // or your own hosted image
+      content: { rendered: "<p>Your full article HTML here.</p><p>Second paragraph.</p>" }
+    }
+  };
+  console.log(HOME_OVERRIDES.enabled)
+  if (HOME_OVERRIDES.enabled==false){
+    maxstories=16;
+  }
+
+
+
+
   function now(){ return Date.now(); }
   function isFresh(){
     const t = Number(localStorage.getItem(LS.lastFetch) || "0");
@@ -190,10 +217,32 @@
   }
 
   function imgFrom(post){
+    if (!post) return "";
+    if (post._custom && post._custom_image) return post._custom_image;
+
     const yo = post?.yoast_head_json?.og_image?.[0]?.url;
     if (yo) return yo;
     return post?._embedded?.["wp:featuredmedia"]?.[0]?.source_url || "";
   }
+  function applyHomeOverrides(posts){
+    if (!HOME_OVERRIDES?.enabled) return posts;
+    if (!Array.isArray(posts) || !posts.length) return posts;
+
+    const idx = Number(HOME_OVERRIDES.index ?? 1);
+    const custom = HOME_OVERRIDES.article;
+
+    if (!custom) return posts;
+
+    // Make a shallow copy so we don't mutate original
+    const out = posts.slice();
+
+    // Ensure the list is long enough to place the custom card
+    while (out.length <= idx) out.push(null);
+
+    out[idx] = custom;
+    return out.filter(Boolean);
+  }
+
 
   function storePost(p){
     if (!p || !p.id) return;
@@ -298,23 +347,32 @@
         <div id="${feedId}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
       </section>`,
 
-    card: (post) => `
-      <div class="bg-white rounded-lg overflow-hidden shadow-sm news-card">
-        <a href="#story-${post.id}" data-story-id="${post.id}">
-          <img
-            src="${imgFrom(post)}"
-            alt=""
-            loading="lazy"
-            decoding="async"
-            class="w-full h-48 object-cover"
-            onerror="this.style.display='none'">
-          <div class="p-4">
-            <span class="text-xs text-gray-500">${post?.yoast_head_json?.author || "Unknown"} • ${fmtDate(post.date)}</span>
-            <h3 class="news-title headline-font font-bold text-lg my-2">${post.title.rendered}</h3>
-            <p class="text-gray-600 text-sm">${post?.yoast_head_json?.description || ""}</p>
-          </div>
-        </a>
-      </div>`,
+card: (post) => `
+  <div class="bg-white rounded-lg overflow-hidden shadow-sm news-card">
+    <a href="#story-${post.id}" data-story-id="${post.id}" class="block">
+      <img
+        src="${imgFrom(post)}"
+        alt=""
+        loading="lazy"
+        decoding="async"
+        class="w-full h-48 object-cover block"
+        data-story-id="${post.id}"
+        onerror="this.style.display='none'">
+      <div class="p-4">
+        <span class="text-xs text-gray-500">
+          ${post?.yoast_head_json?.author || "Unknown"} • ${fmtDate(post.date)}
+        </span>
+        <h3 class="news-title headline-font font-bold text-lg my-2">
+          ${post.title.rendered}
+        </h3>
+        <p class="text-gray-600 text-sm">
+          ${post?.yoast_head_json?.description || ""}
+        </p>
+      </div>
+    </a>
+  </div>
+`,
+
 
     storyShell: () => `
       <div id="story" class="section">
@@ -520,10 +578,19 @@
   }
 
   async function fetchAndRenderHome(){
-    const data = await loadBySearch('court OR law OR legal', maxstories);
+    let data = await loadBySearch('court OR law OR legal', maxstories);
     if (!data.length) return;
 
-    data.forEach(p => { seenAll.add(p.id); storePost(p); });
+    // Inject your custom post into the chosen slot
+    data = applyHomeOverrides(data);
+
+    // Only store/mark real WP posts (numeric ids)
+    data.forEach(p => {
+      if (p && typeof p.id === "number"){
+        seenAll.add(p.id);
+        storePost(p);
+      }
+    });
 
     const heroImg = imgFrom(data[0]);
     if (heroImg){
@@ -536,10 +603,14 @@
 
     clearFeedUI('home');
     qs('#home-hero-slot').innerHTML = tpl.hero(data[0], 'home');
+
+    // Grid cards (skip hero)
     pumpCards(qs('#home-feed'), 'home', data.slice(1, maxstories));
 
-    storeFeed('home', data.slice(0, maxstories));
+    // Store feed ids, but only numeric WP ids
+    storeFeed('home', data.filter(p => typeof p.id === "number").slice(0, maxstories));
   }
+
 
   async function fetchAndRenderCategory(catKey){
     const cfg = CATS.find(c => c.key === catKey);
@@ -599,8 +670,20 @@
     }
   }
 
+  function getCustomPostById(id){
+    const a = HOME_OVERRIDES?.article;
+    if (HOME_OVERRIDES?.enabled && a && String(a.id) === String(id)) return a;
+    return null;
+  }
+
+
   async function showStory(id){
-    let data = getPost(id);
+    let data = getCustomPostById(id) || getPost(id);
+
+    if (!data && typeof id === "string"){
+      // custom string id not found, avoid WP fetch
+      data = null;
+    }
 
     if (!data){
       try{
@@ -611,6 +694,8 @@
         }
       } catch {}
     }
+
+    // rest of your showStory stays the same...
 
     const setText = (sel, val) => { const el = qs(sel); if (el) el.textContent = val || ''; };
     const setHTML = (sel, val) => { const el = qs(sel); if (el) el.innerHTML = val || ''; };
@@ -724,14 +809,26 @@
     }
   });
 
-  document.addEventListener('click', (e) => {
-    const back = e.target.closest('#back-button');
-    if (!back) return;
+document.addEventListener('click', (e) => {
+  const sec = e.target.closest('[data-section]');
+  if (sec){
     e.preventDefault();
+    const id = sec.getAttribute('data-section') || 'home';
+    closeMenu();
+    if (location.hash !== `#${id}`) location.hash = `#${id}`;
+    showSection(id);
+    setTimeout(() => prefetchOthersAfter(id), 0);
+    return;
+  }
 
-    if (history.length > 1) history.back();
-    else { location.hash = '#home'; showSection('home'); }
-  });
+  const storyEl = e.target.closest('a[data-story-id], [data-story-id]');
+  if (storyEl){
+    e.preventDefault();
+    const id = storyEl.getAttribute('data-story-id');
+    closeMenu();
+    if (id) showStory(id);
+  }
+});
 
   window.addEventListener('hashchange', () => {
     const h = parseHash();
