@@ -4,10 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Australian Court Chronicle</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet" />
 <script defer src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
@@ -151,19 +153,19 @@
 
   const CATS = [
     { key: "home", label: "Home", type: "home" },
-    { key: "highcourt", label: "High Court", type: "category", search: "Aus AND High Court", tagline: "Latest from the High Court of Australia" },
-    { key: "federal", label: "Federal Court", type: "category", search: "Aus AND Federal AND Court", tagline: "Decisions and filings across the Federal Court" },
+    { key: "highcourt", label: "High Court", type: "category", search: "high Court", tagline: "Latest from the High Court of Australia" },
+    { key: "federal", label: "Federal Court", type: "category", search: "federal AND court", tagline: "Decisions and filings across the Federal Court" },
     { key: "state", label: "NSW Courts", type: "category", search: "NSW AND Court", tagline: "Key rulings across the states and territories" },
-    { key: "tribunals", label: "Tribunals", type: "category", search: "Aus AND Tribunal OR appeal", tagline: "Significant tribunal decisions and trends" },
-    { key: "analysis", label: "Legal Analysis", type: "category", search: "Aus AND law AND review", tagline: "Explainers and expert commentary" },
-    { key: "judges", label: "Judges", type: "category", search: "Aus AND judge", tagline: "Appointments, retirements and profiles" },
+    { key: "tribunals", label: "Tribunals", type: "category", search: "tribunal OR appeal", tagline: "Significant tribunal decisions and trends" },
+    { key: "analysis", label: "Legal Analysis", type: "category", search: "law AND review", tagline: "Explainers and expert commentary" },
+    { key: "judges", label: "Judges", type: "category", search: "judge OR magistrate", tagline: "Appointments, retirements and profiles" },
     { key: "Cyber", label: "Cyber Crime", type: "category", search: "cyber OR hacker OR breach", tagline: "Technology and Law" },
-    { key: "Tax", label: "Tax", type: "category", search: "aus AND tax OR ato", tagline: "ATO and Tax" },
-      { key: "Corruption", label: "Corruption", type: "category", search: "aus AND corrupt", tagline: "Corruption" },
+    { key: "Tax", label: "Tax", type: "category", search: "tax OR ato", tagline: "ato OR tax" },
+      { key: "Corruption", label: "Corruption", type: "category", search: "corruption", tagline: "Corruption" }
 
   ];
 
-  var maxstories = 16;
+  var maxstories = 10;
 
 
   const loaded   = Object.fromEntries(CATS.map(c => [c.key, false]));
@@ -199,10 +201,7 @@
       content: { rendered: "<p>Your full article HTML here.</p><p>Second paragraph.</p>" }
     }
   };
-  console.log(HOME_OVERRIDES.enabled)
-  if (HOME_OVERRIDES.enabled==false){
-    maxstories=16;
-  }
+
 
 
 
